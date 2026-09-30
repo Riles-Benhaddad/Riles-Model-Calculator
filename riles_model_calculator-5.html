@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Riles Model Calculator</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:system-ui,-apple-system,sans-serif;background:#0a0a0a;color:#e0e0e0;margin:0;padding:20px;display:flex;justify-content:center}
+  .container{max-width:520px;width:100%}
+  h1{color:#4ade80;font-size:1.4em;margin:0 0 4px}
+  .subtitle{color:#888;font-size:.8em;margin-bottom:16px}
+  .tabs{display:flex;gap:8px;margin-bottom:8px}
+  .tab{flex:1;margin:0;padding:10px;background:#1a1a1a;border:1px solid #333;color:#aaa;font-size:.9em;font-weight:600;border-radius:6px;cursor:pointer}
+  .tab.on{background:#4ade80;color:#0a0a0a;border-color:#4ade80}
+  .hint{font-size:.78em;color:#777;margin:6px 0 4px;line-height:1.5}
+  label{display:block;margin-top:12px;font-size:.85em;color:#aaa}
+  input,select{width:100%;padding:10px;margin-top:4px;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#fff;font-size:1em}
+  input:focus,select:focus,button:focus-visible{outline:2px solid #4ade80;outline-offset:1px}
+  .row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .go{width:100%;padding:14px;margin-top:20px;background:#4ade80;border:none;border-radius:6px;color:#0a0a0a;font-size:1em;font-weight:700;cursor:pointer}
+  .go:active{background:#22c55e}
+  details{margin-top:14px;font-size:.85em;color:#aaa}
+  summary{cursor:pointer;padding:4px 0}
+  .results{margin-top:20px;padding:16px;background:#1a1a1a;border-radius:8px;border:1px solid #333}
+  .r{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #2a2a2a;font-size:.9em}
+  .r:last-child{border-bottom:none}
+  .r span:first-child{color:#888}
+  .r span:last-child{color:#4ade80;font-weight:700;text-align:right}
+  .warn{margin-top:10px;padding:10px;border-left:3px solid #f59e0b;background:#211a0a;color:#e6c27a;font-size:.8em;line-height:1.5;border-radius:0 6px 6px 0}
+  .err{color:#ef4444;font-size:.85em;margin-top:12px}
+  .note{font-size:.75em;color:#666;margin-top:18px;line-height:1.5}
+  code{color:#9ca3af}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🦖 Riles Model Calculator</h1>
+  <div class="subtitle">Position-specific cervical allometry for theropod length and mass</div>
+
+  <div class="tabs">
+    <button class="tab on" id="tabD" onclick="setMode('D')">Direct</button>
+    <button class="tab" id="tabR" onclick="setMode('R')">Reverse engineer</button>
+  </div>
+  <div class="hint" id="modeHint"></div>
+
+  <label>Family</label>
+  <select id="family" onchange="onFamily()"></select>
+  <div class="hint" id="eqHint"></div>
+
+  <div id="directIn">
+    <div class="row">
+      <div><label id="l1">C3 centrum (m)</label><input type="number" id="v1" step="0.001" inputmode="decimal" placeholder="0.107"></div>
+      <div><label id="l2">C4 centrum (m)</label><input type="number" id="v2" step="0.001" inputmode="decimal" placeholder="0.128"></div>
+      <div><label id="l3">C5 centrum (m)</label><input type="number" id="v3" step="0.001" inputmode="decimal" placeholder="0.114"></div>
+    </div>
+    <label>Or enter block length S directly (m)</label>
+    <input type="number" id="sIn" step="0.001" inputmode="decimal" placeholder="e.g. 0.349">
+  </div>
+
+  <div id="reverseIn" style="display:none">
+    <label>Known or assumed body length L (m)</label>
+    <input type="number" id="lIn" step="0.01" inputmode="decimal" placeholder="e.g. 12.8">
+    <label>Morphology index C (optional, only used if g ≠ 0)</label>
+    <input type="number" id="cIn" step="0.001" inputmode="decimal" placeholder="e.g. 1.000">
+  </div>
+
+  <details>
+    <summary>Advanced parameters</summary>
+    <div class="row2">
+      <div><label>Clade correction on L (%)</label><input type="number" id="corr" step="0.1"></div>
+      <div><label>Morphology exponent g</label><input type="number" id="g" step="0.01" value="0"></div>
+      <div><label>Reference index C0</label><input type="number" id="c0" step="0.001" value="1"></div>
+      <div><label>Mass coefficient a</label><input type="number" id="ma" step="0.0001" value="0.001"></div>
+      <div><label>Mass exponent b</label><input type="number" id="mb" step="0.01" value="3.5"></div>
+      <div><label>Soft-tissue ratio s</label><input type="number" id="s" step="0.01" value="1"></div>
+      <div><label>Soft-tissue exponent r</label><input type="number" id="r" step="0.01" value="1"></div>
+    </div>
+    <div class="hint">g = 0 gives the plain block model. s = 1 (or r = 0) means no soft-tissue adjustment. Per §24–25 of the paper, keep g and r only if they improve blind prediction.</div>
+  </details>
+
+  <button class="go" onclick="calculate()">Calculate</button>
+  <div id="out"></div>
+
+  <div class="note">
+    Length: <code>L = (S/α)<sup>1/p</sup> · (C/C0)<sup>−g/p</sup></code> (§7). Mass: <code>M = a · L<sup>b</sup> · s<sup>r</sup></code> (§14), with a = 0.001 and b = 3.5 as in the original calculator.<br>
+    Family constants come from the spreadsheet's Equations &amp; Notes sheet. Every family except Tyrannosauridae uses a C3–C5 block.<br>
+    If a specimen falls outside ±15% of the family, the model may not apply.
+  </div>
+</div>
+
+<script>
+// 'ab': L = (S/a)^b   |   'kq': L = k * S^q   → both convert to S = α·L^p
+const FAM = {
+  abel:  {n:'Abelisauridae', f:'ab', a:0.049, b:1.14, corr:0, blk:['C3','C4','C5'], eq:'L = (S / 0.049)^1.14'},
+  metri: {n:'Metriacanthosauridae', f:'ab', a:0.0063, b:0.516, corr:0, blk:['C3','C4','C5'], eq:'L = (S / 0.0063)^0.516'},
+  allo:  {n:'Allosauroidea (Allosauridae fit)', f:'kq', k:34.7, q:0.961, corr:0, blk:['C3','C4','C5'], eq:'L = 34.7 × S^0.961'},
+  carch: {n:'Carcharodontosauridae (hierarchical)', f:'kq', k:34.7, q:0.961, corr:-10, blk:['C3','C4','C5'], eq:'L = 34.7 × S^0.961, then clade correction (paper §27.1: −10%)'},
+  tyr:   {n:'Tyrannosauridae, Albertosaurinae', f:'kq', k:34.85, q:1.014, corr:0, blk:['C6','C7','C8'], eq:'L = 34.85 × S^1.014 (fitted on a C6–C8 block, n = 3)'}
+};
+let mode = 'D';
+const $ = id => document.getElementById(id);
+const num = id => { const v = parseFloat($(id).value); return isNaN(v) ? null : v; };
+
+function ap(f){ return f.f==='ab' ? {alpha:f.a, p:1/f.b} : {alpha:Math.pow(f.k,-1/f.q), p:1/f.q}; }
+
+function init(){
+  $('family').innerHTML = Object.keys(FAM).map(k=>`<option value="${k}">${FAM[k].n}</option>`).join('');
+  onFamily(); setMode('D');
+}
+function onFamily(){
+  const f = FAM[$('family').value];
+  $('l1').textContent = f.blk[0]+' centrum (m)';
+  $('l2').textContent = f.blk[1]+' centrum (m)';
+  $('l3').textContent = f.blk[2]+' centrum (m)';
+  $('corr').value = f.corr;
+  $('eqHint').textContent = f.eq;
+}
+function setMode(m){
+  mode = m;
+  $('tabD').classList.toggle('on', m==='D'); $('tabR').classList.toggle('on', m==='R');
+  $('directIn').style.display = m==='D' ? '' : 'none';
+  $('reverseIn').style.display = m==='R' ? '' : 'none';
+  $('modeHint').textContent = m==='D'
+    ? 'Neck measurements in, body length and mass out.'
+    : 'Known length in, the block length S the equation would require out.';
+  $('out').innerHTML = '';
+}
+const row = (a,b) => `<div class="r"><span>${a}</span><span>${b}</span></div>`;
+const massOf = (L,P) => P.ma * Math.pow(L,P.mb) * Math.pow(P.s,P.r);
+const fmtT = t => t < 0.1 ? t.toFixed(3)+' t' : t.toFixed(2)+' t';
+
+function calculate(){
+  const key = $('family').value, f = FAM[key], {alpha,p} = ap(f);
+  const P = {g:num('g')??0, c0:num('c0')||1, corr:num('corr')??0, ma:num('ma'), mb:num('mb'), s:num('s')??1, r:num('r')??1};
+  if(P.ma===null||P.mb===null){ $('out').innerHTML='<div class="err">Mass coefficient a and exponent b are required.</div>'; return; }
+  const k = 1 + P.corr/100;
+  let html = '', warns = [];
+
+  if(mode==='D'){
+    const v = [num('v1'),num('v2'),num('v3')], sDirect = num('sIn');
+    let S, C = null;
+    if(v.every(x=>x!==null && x>0)){
+      S = v[0]+v[1]+v[2]; C = Math.sqrt(v[0]*v[2])/v[1];
+    } else if(sDirect>0){ S = sDirect; }
+    else { $('out').innerHTML='<div class="err">Enter all three centrum lengths, or S directly.</div>'; return; }
+    let morph = 1;
+    if(P.g!==0){
+      if(C===null) warns.push('g ≠ 0 needs C, which needs all three vertebrae. Morphology term skipped.');
+      else morph = Math.pow(C/P.c0, -P.g/p);
+    }
+    const L = Math.pow(S/alpha, 1/p) * morph * k;
+    const M = massOf(L,P);
+    html = '<div class="results">'
+      + row('S (block length)', S.toFixed(4)+' m')
+      + row('C (morphology index)', C===null ? 'n/a' : C.toFixed(4))
+      + row('Predicted length L', L.toFixed(2)+' m')
+      + row('Predicted mass', fmtT(M))
+      + row('±15% length range', (L*.85).toFixed(2)+' – '+(L*1.15).toFixed(2)+' m')
+      + row('Mass across that range', fmtT(massOf(L*.85,P))+' – '+fmtT(massOf(L*1.15,P)))
+      + '</div>';
+    if(key==='tyr') warns.push('This equation was fitted on a C6–C8 block. Enter C6, C7, C8, not C3–C5.');
+    if(key==='carch') warns.push('The clade correction is a hierarchical adjustment, not a direct fit. The spreadsheet notes it fits Giganotosaurus but overshoots Carcharodontosaurus.');
+  } else {
+    const L = num('lIn');
+    if(!(L>0)){ $('out').innerHTML='<div class="err">Enter a body length in metres.</div>'; return; }
+    let morph = 1; const C = num('cIn');
+    if(P.g!==0){
+      if(C===null) warns.push('g ≠ 0 but no C given, so C = C0 was assumed.');
+      else morph = Math.pow(C/P.c0, P.g);
+    }
+    const Sreq = alpha * Math.pow(L/k, p) * morph;
+    const M = massOf(L,P);
+    html = '<div class="results">'
+      + row('Input length L', L.toFixed(2)+' m')
+      + row('Required S (block length)', Sreq.toFixed(4)+' m')
+      + row('S for L −15% / +15%', (alpha*Math.pow(L*.85/k,p)*morph).toFixed(4)+' / '+(alpha*Math.pow(L*1.15/k,p)*morph).toFixed(4)+' m')
+      + row('Mean centrum if 3 equal', (Sreq/3*1000).toFixed(1)+' mm')
+      + row('Mass from this length', fmtT(M))
+      + '</div>';
+    warns.push('This is circular by construction. S is solved from L using the same equation, so it shows what the neck would have to be, not a validation. Equal thirds are only a rough guide; real centra vary along the neck.');
+    if(key==='tyr') warns.push('S here is for a C6–C8 block.');
+  }
+  $('out').innerHTML = html + warns.map(w=>`<div class="warn">${w}</div>`).join('');
+}
+init();
+</script>
+</body>
+</html>
